@@ -1,0 +1,108 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Prometheus Configuration
+# Project: AspTax, Node App HA (Incresol Software Services)
+# Monitors: EC2 servers, Nginx, Spring Boot apps, MongoDB, Docker containers
+# ─────────────────────────────────────────────────────────────────────────────
+
+global:
+  scrape_interval:     15s   # How often to scrape targets
+  evaluation_interval: 15s   # How often to evaluate alert rules
+  scrape_timeout:      10s
+
+  # Labels added to all time series from this Prometheus
+  external_labels:
+    monitor:     'incresol-monitoring'
+    environment: 'production'
+
+# ── ALERT RULES ────────────────────────────────────────────────────────────────
+rule_files:
+  - "alert-rules.yml"
+
+# ── ALERTMANAGER CONNECTION ───────────────────────────────────────────────────
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# ── SCRAPE CONFIGURATIONS ─────────────────────────────────────────────────────
+scrape_configs:
+
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ── NODE EXPORTER (CPU, RAM, Disk on all servers) ──────────────────────────
+  # Install on each server: apt install prometheus-node-exporter
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets:
+          - 'app-server-1:9100'    # AspTax app server 1
+          - 'app-server-2:9100'    # AspTax app server 2
+          - 'db-server:9100'       # Database server
+        labels:
+          project: 'asptax'
+          env:     'prod'
+
+  # ── NGINX EXPORTER ────────────────────────────────────────────────────────
+  # Monitors Nginx request rates, active connections, errors
+  - job_name: 'nginx'
+    static_configs:
+      - targets:
+          - 'app-server-1:9113'
+          - 'app-server-2:9113'
+        labels:
+          project: 'asptax'
+          service: 'nginx'
+
+  # ── SPRING BOOT ACTUATOR (Java app metrics) ───────────────────────────────
+  # Spring Boot Actuator exposes /actuator/prometheus endpoint
+  - job_name: 'springboot'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets:
+          - 'app-server-1:8080'
+          - 'app-server-2:8080'
+        labels:
+          project: 'asptax'
+          service: 'springboot'
+
+  # ── MONGODB EXPORTER ──────────────────────────────────────────────────────
+  # Monitors MongoDB replica set, connections, operations
+  - job_name: 'mongodb'
+    static_configs:
+      - targets:
+          - 'mongo-primary:9216'
+          - 'mongo-secondary:9216'
+        labels:
+          project: 'node-app-ha'
+          service: 'mongodb'
+
+  # ── DOCKER CONTAINER METRICS (cAdvisor) ──────────────────────────────────
+  # Monitors CPU/RAM/network per container
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets:
+          - 'app-server-1:8080'
+          - 'app-server-2:8080'
+        labels:
+          service: 'docker-containers'
+
+  # ── BLACKBOX EXPORTER (HTTP endpoint monitoring) ─────────────────────────
+  # Checks if your apps are reachable from outside
+  - job_name: 'blackbox-http'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - 'http://your-app-domain.com/health'      # AspTax health endpoint
+          - 'http://your-app-domain.com/api/status'  # API status check
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

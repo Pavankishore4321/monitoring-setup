@@ -1,0 +1,90 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Datadog Agent Configuration
+# Project: AspTax (Incresol Software Services)
+# Monitors: Nginx, Spring Boot, MongoDB, Docker containers
+# Install:  DD_API_KEY=your-key bash -c "$(curl -L https://install.datadoghq.com/scripts/install_script_agent7.sh)"
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Your Datadog API key (set via environment variable — never hardcode)
+api_key: "YOUR_DATADOG_API_KEY"
+
+# Datadog site (use datadoghq.eu for EU region)
+site: "datadoghq.com"
+
+# Hostname shown in Datadog dashboard
+hostname: "asptax-prod-server"
+
+# Environment tag
+env: "production"
+
+# ── TAGS ──────────────────────────────────────────────────────────────────────
+# These tags appear on all metrics in Datadog
+tags:
+  - project:asptax
+  - env:production
+  - team:devops
+  - managed_by:incresol
+
+# ── LOG COLLECTION ────────────────────────────────────────────────────────────
+logs_enabled: true
+
+logs:
+  # Nginx access logs
+  - type: file
+    path: /var/log/nginx/asptax-access.log
+    service: nginx
+    source: nginx
+    tags:
+      - project:asptax
+      - log_type:access
+
+  # Nginx error logs
+  - type: file
+    path: /var/log/nginx/asptax-error.log
+    service: nginx
+    source: nginx
+    tags:
+      - project:asptax
+      - log_type:error
+
+  # Spring Boot logs
+  - type: file
+    path: /opt/tomcat/logs/catalina.out
+    service: springboot
+    source: java
+    tags:
+      - project:asptax
+
+# ── APM (Application Performance Monitoring) ─────────────────────────────────
+apm_config:
+  enabled: true
+  apm_non_local_traffic: true
+
+# ── PROCESS MONITORING ────────────────────────────────────────────────────────
+process_config:
+  process_collection:
+    enabled: true
+
+# ── DOCKER MONITORING ────────────────────────────────────────────────────────
+listeners:
+  - name: docker
+
+config_providers:
+  - name: docker
+    polling: true
+
+# ── INTEGRATIONS ──────────────────────────────────────────────────────────────
+# These map to /etc/datadog-agent/conf.d/ integration configs
+
+# Nginx integration — monitors request rates, connections, errors
+nginx_check:
+  instances:
+    - nginx_status_url: http://localhost/nginx_status
+
+# MongoDB integration
+mongo_check:
+  instances:
+    - hosts:
+        - mongo-primary:27017
+        - mongo-secondary:27017
+      replica_check: true

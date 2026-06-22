@@ -1,0 +1,153 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Prometheus Alert Rules
+# Project: AspTax, Node App HA (Incresol Software Services)
+# Covers: CPU, Memory, Disk, Service Down, HTTP errors, MongoDB replica
+# ─────────────────────────────────────────────────────────────────────────────
+
+groups:
+
+  # ── SERVER ALERTS ──────────────────────────────────────────────────────────
+  - name: server-alerts
+    rules:
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value | printf \"%.1f\" }}% on {{ $labels.instance }} for more than 5 minutes."
+
+      - alert: CriticalCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CRITICAL CPU on {{ $labels.instance }}"
+          description: "CPU at {{ $value | printf \"%.1f\" }}% on {{ $labels.instance }}."
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value | printf \"%.1f\" }}% on {{ $labels.instance }}."
+
+      - alert: DiskSpaceWarning
+        expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100 > 75
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk usage warning on {{ $labels.instance }}"
+          description: "Disk at {{ $value | printf \"%.1f\" }}% on {{ $labels.instance }}."
+
+      - alert: DiskSpaceCritical
+        expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CRITICAL disk on {{ $labels.instance }}"
+          description: "Disk at {{ $value | printf \"%.1f\" }}% — immediate action required on {{ $labels.instance }}."
+
+      - alert: ServerDown
+        expr: up{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Server DOWN: {{ $labels.instance }}"
+          description: "Server {{ $labels.instance }} has been unreachable for more than 1 minute."
+
+  # ── NGINX ALERTS ───────────────────────────────────────────────────────────
+  - name: nginx-alerts
+    rules:
+
+      - alert: NginxDown
+        expr: up{job="nginx"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nginx DOWN on {{ $labels.instance }}"
+          description: "Nginx on {{ $labels.instance }} is not responding."
+
+      - alert: NginxHighErrorRate
+        expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Nginx 5xx errors on {{ $labels.instance }}"
+          description: "More than 10 HTTP 5xx errors/sec on {{ $labels.instance }}."
+
+  # ── SPRING BOOT APP ALERTS ─────────────────────────────────────────────────
+  - name: springboot-alerts
+    rules:
+
+      - alert: SpringBootDown
+        expr: up{job="springboot"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Spring Boot app DOWN on {{ $labels.instance }}"
+          description: "Spring Boot application on {{ $labels.instance }} is not responding."
+
+      - alert: SpringBootHighResponseTime
+        expr: http_server_requests_seconds_sum / http_server_requests_seconds_count > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow response time on {{ $labels.instance }}"
+          description: "Average response time is {{ $value | printf \"%.2f\" }}s — above 2s threshold."
+
+  # ── MONGODB ALERTS ─────────────────────────────────────────────────────────
+  - name: mongodb-alerts
+    rules:
+
+      - alert: MongoDBDown
+        expr: up{job="mongodb"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MongoDB DOWN on {{ $labels.instance }}"
+          description: "MongoDB on {{ $labels.instance }} is not responding."
+
+      - alert: MongoDBReplicationLag
+        expr: mongodb_mongod_replset_member_optime_date{state="SECONDARY"} - on() mongodb_mongod_replset_member_optime_date{state="PRIMARY"} > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MongoDB replication lag detected"
+          description: "Secondary is lagging more than 30 seconds behind primary."
+
+  # ── HTTP ENDPOINT ALERTS ───────────────────────────────────────────────────
+  - name: endpoint-alerts
+    rules:
+
+      - alert: AppEndpointDown
+        expr: probe_success{job="blackbox-http"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Endpoint DOWN: {{ $labels.instance }}"
+          description: "HTTP endpoint {{ $labels.instance }} has been unreachable for 2 minutes."
+
+      - alert: SSLCertExpiringSoon
+        expr: probe_ssl_earliest_cert_expiry - time() < 86400 * 30
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "SSL cert expiring soon: {{ $labels.instance }}"
+          description: "SSL certificate for {{ $labels.instance }} expires in less than 30 days."
